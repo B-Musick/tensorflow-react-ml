@@ -28,8 +28,6 @@ function App() {
     if(enabledWebcamListener){
       // Now let's start classifying a frame in the stream.
       model.detect(webcam.current).then(function(predictions){
-        console.log('predictWebcam')
-
         // Remove any highlighting we did previous frame.
         for (let i = 0; i < children.length; i++) {
           liveView.current.removeChild(children[i]);
@@ -53,7 +51,7 @@ function App() {
               left: 0
             }
 
-            const p = <p style={style}>{innerText}</p>;
+            const p = <p className="text-3xl underline" style={style}>{innerText}</p>;
 
             let highlighterStyle = {
               left: predictions[n].bbox[0] + 'px', 
@@ -102,7 +100,7 @@ function App() {
   return (
     <>
       <div>
-        <p>Loaded TensorFlow.js - version:  {tf.version.tfjs}</p>
+        <p className='underline'>Loaded TensorFlow.js - version:  {tf.version.tfjs}</p>
         <h1>Multiple object detection using pre trained model in TensorFlow.js</h1>
 
         <p>Wait for the model to load before clicking the button to enable the webcam - at which point it will become visible to use.</p>
