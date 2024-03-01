@@ -1,5 +1,11 @@
-import { useState, useRef, createElement } from 'react'
+import { useState, useRef } from 'react'
 import './App.css'
+
+import LoadingWheel from './components/LoadingWheel'
+import BoundingBox from './components/BoundingBox';
+
+import { IoIosCheckmarkCircleOutline } from "react-icons/io";
+import { toPixels } from './helpers';
 
 function App() {
   const webcam = useRef(null)
@@ -8,7 +14,11 @@ function App() {
 
   const [enabledWebcamListener, setEnabledWebcamListener] = useState(false);
   const [model, setModel] = useState(undefined);
-  const [children, setChildren] = useState([])
+  const [children, setChildren] = useState([]);
+
+  // Function to start the timer
+  // src: https://dev.to/indrakantm23/create-a-timer-in-react-with-start-pause-and-reset-feature-1k40
+  
   // Before we can use COCO-SSD class we must wait for it to finish
   // loading. Machine Learning models can be large and take a moment 
   // to get everything needed to run.
@@ -18,13 +28,18 @@ function App() {
     setModel(loadedModel);
   });
 
-
   function getUserMediaSupported() {
     // Cast to boolean value (!!)
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
   }
 
-  function predictWebcam() {
+  /**
+   * 
+   * @param counter this is passed into recursive function to set the boolean eventually to determine its a human
+   */
+  function predictWebcam(counter:number, invalidCounter: number) {
+    let validHuman = false;
+
     if(enabledWebcamListener){
       // Now let's start classifying a frame in the stream.
       model.detect(webcam.current).then(function(predictions){
@@ -33,42 +48,44 @@ function App() {
           liveView.current.removeChild(children[i]);
         }
         children.splice(0);
-        
         // Now lets loop through predictions and draw them to the live view if
         // they have a high confidence score.
         for (let n = 0; n < predictions.length; n++) {
-          // If we are over 66% sure we are sure we classified it right, draw it!
-          if (predictions[n].score > 0.66) {
-            let innerText = predictions[n].class  + ' - with ' 
-                + Math.round(parseFloat(predictions[n].score) * 100) 
-                + '% confidence.';
+          let {class:objectPredicted, score, bbox} = predictions[n];
+          let [boundingBoxX ,boundingBoxY, boundingBoxWidth, boundingBoxHeight] = bbox;
 
-            let style = {
-              marginLeft: predictions[n].bbox[0] + 'px', 
-              marginTop: predictions[n].bbox[1] - 10 + 'px', 
-              width: '100px', 
-              top: 0,
-              left: 0
-            }
-
-            const p = <p className="text-3xl underline" style={style}>{innerText}</p>;
-
-            let highlighterStyle = {
-              left: predictions[n].bbox[0] + 'px', 
-              top: predictions[n].bbox[1] + 'px', 
-              width: predictions[n].bbox[2] + 'px', 
-              height: predictions[n].bbox[3] + 'px'
-            }
-
-            const highlighter = <div className="highlighter" key={n} style={highlighterStyle}></div>;
-            console.log(highlighter)
- 
-            setChildren([...children, p, highlighter])
+          if(counter >= 10) {
+            validHuman = true;
           }
+          // If we are over 66% sure we are sure we classified it right, draw it!
+          if (score > 0.66) {
+            invalidCounter = 0;
+            
+            let loadingWheelStyle = {
+              left: toPixels(boundingBoxX + (boundingBoxWidth/2 - 35)), 
+              top:  toPixels(boundingBoxY + (boundingBoxHeight/2 - 35))
+            }
+
+            const loadingWheel = validHuman ? <IoIosCheckmarkCircleOutline className="absolute w-20 h-20 text-green-500" style={loadingWheelStyle} />: <LoadingWheel loadingWheelStyle={loadingWheelStyle} />
+
+            setChildren([<BoundingBox bbox={bbox} objectPredicted={objectPredicted} score={score}/>, loadingWheel])
+          } else {
+            invalidCounter++;
+
+            if(invalidCounter > 5) {
+              counter = -1;
+            }
+          }
+
+          objectPredicted != 'person' ? invalidCounter++ : counter++;
         }
-  
-        // Call this function again to keep predicting when the browser is ready.
-        window.requestAnimationFrame(predictWebcam);
+
+        if(counter < 20){
+          // Call this function again to keep predicting when the browser is ready.
+          window.requestAnimationFrame(()=>predictWebcam(counter, invalidCounter)); 
+        } else {
+          setChildren([]);
+        }
       });
     }
   }
@@ -100,19 +117,12 @@ function App() {
   return (
     <>
       <div>
-        <p className='underline'>Loaded TensorFlow.js - version:  {tf.version.tfjs}</p>
-        <h1>Multiple object detection using pre trained model in TensorFlow.js</h1>
-
-        <p>Wait for the model to load before clicking the button to enable the webcam - at which point it will become visible to use.</p>
-
-        <section id="demos" className={model ? "":"invisible"}>
-
-          <p>Hold some objects up close to your webcam to get a real-time classification! When ready click "enable webcam" below and accept access to the webcam when the browser asks (check the top left of your window)</p>
-          
+        <section id="demos" className={model ? "":"invisible"}>          
           <div ref={liveView} className="camView">
             {children}
+            
             <button ref={webcamButton} onClick={enableWebcam}>Enable Webcam</button>
-            <video onLoadedData={predictWebcam} ref={webcam} autoPlay muted width="640" height="480"></video>
+            <video onLoadedData={()=>predictWebcam(0)} ref={webcam} autoPlay muted width="640" height="480"></video>
           </div>
         </section>
       </div>
