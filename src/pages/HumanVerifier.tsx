@@ -10,11 +10,12 @@ function HumanVerifier() {
   const webcam = useRef(null)
   const webcamButton = useRef(null)
   const liveView = useRef(null)
+  const humanMessage = useRef(null)
 
   const [enabledWebcamListener, setEnabledWebcamListener] = useState(false);
   const [model, setModel] = useState(undefined);
   const [children, setChildren] = useState([]);
-
+  
   cocoSsd.load().then(function(loadedModel){
     setModel(loadedModel);
   });
@@ -45,14 +46,13 @@ function HumanVerifier() {
 
           if(counter >= 10) validHuman = true;
           
-          
           if (score > 0.66) {
             // Draw box if 66% sure its a match
             invalidCounter = 0;
             
             let loadingWheelStyle = {
-              left: toPixels(boundingBoxX + (boundingBoxWidth/2 - 35)), 
-              top:  toPixels(boundingBoxY + (boundingBoxHeight/2 - 35))
+              left: toPixels(boundingBoxX + (boundingBoxWidth/4 - 35)), 
+              top:  toPixels(boundingBoxY + (boundingBoxHeight/4 - 35))
             }
 
             const loadingWheel = validHuman ? <IoIosCheckmarkCircleOutline className="absolute w-20 h-20 text-green-500" style={loadingWheelStyle} />: <LoadingWheel loadingWheelStyle={loadingWheelStyle} />
@@ -67,7 +67,15 @@ function HumanVerifier() {
           objectPredicted != 'person' ? invalidCounter++ : counter++;
         }
 
-        counter < 20 ? window.requestAnimationFrame(()=>predictWebcam(counter, invalidCounter)) : setChildren([]);
+        if(counter < 20) window.requestAnimationFrame(()=>predictWebcam(counter, invalidCounter))
+        else{ 
+          webcam.current.srcObject.getTracks().forEach(track => track.stop());
+          setEnabledWebcamListener(false);
+          setModel(null);
+          setChildren([]); 
+          liveView.current.srcObject = <div>hi</div>
+          // liveView.current.className = "hidden";
+        }
       });
     }
   }
@@ -79,9 +87,6 @@ function HumanVerifier() {
         return;
       }
 
-      // TODO: implement
-      // e.target.classList.add('removed')
-      // getUsermedia parameters to force video but not audio.
       const constraints = {
         video: true
       };
@@ -90,6 +95,7 @@ function HumanVerifier() {
       navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
         webcam.current.srcObject = stream;
         setEnabledWebcamListener(true);
+        webcamButton.current.className = "hidden"
       });
     } else {
       console.warn('Webcam is not supported!')
@@ -98,13 +104,16 @@ function HumanVerifier() {
 
   return (
     <>
-      <div>
+      <div className="flex w-full h-full justify-center items-center bg-gradient-to-br from-emerald-700 to-emerald-900">
         <section className={model ? "":"invisible"}>          
           <div ref={liveView} className="camView">
             {children}
             
             <button ref={webcamButton} onClick={enableWebcam}>Enable Webcam</button>
-            <video onLoadedData={()=>predictWebcam(0)} ref={webcam} autoPlay muted width="640" height="480"></video>
+            <video onLoadedData={()=>predictWebcam(0)} ref={webcam} className="w-1/2" autoPlay muted width="640" height="480"></video>
+          </div>
+          <div ref={humanMessage} className='hidden'>
+            Congrats you are human
           </div>
         </section>
       </div>
